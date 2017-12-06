@@ -12,5 +12,7 @@ if (!fs.existsSync(resultDir)) {
   await page.goto('https://example.com');
   await page.screenshot({path: `${resultDir}/example.png`});
 
+  fs.writeFileSync(`${resultDir}/example.txt`, await page.content());
+
   await browser.close();
 })();
