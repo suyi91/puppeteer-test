@@ -8,14 +8,26 @@
 const puppeteer = require('puppeteer');
 const axios = require('axios');
 const fs = require('fs');
+const rimraf = require('rimraf');
 
 if (!fs.existsSync('./result')) {
   fs.mkdirSync('./result');
 }
-if (!fs.existsSync('./result/girl')) {
-  fs.mkdirSync('./result/girl');
+if (fs.existsSync('./result/girl')) {
+  rimraf.sync('./result/girl');
 }
-let currentNumber = 1;
+fs.mkdirSync('./result/girl');
+
+function getExtension(str = '') {
+  const dotPos = str.lastIndexOf('.');
+  if (dotPos > -1) {
+    return str.substr(dotPos + 1);
+  }
+  return 'jpg';
+}
+
+let times = 1;
+let currentNum = 1;
 
 async function run(url) {
   console.log('Start to crawl girl\'s pictures...');
@@ -23,37 +35,32 @@ async function run(url) {
   const page = await browser.newPage();
   await page.goto(url);
 
-  let imgURL = await page.evaluate(() => {
-    let imgURL = []
-    let selector = 'a.view_img_link';
-    let imgUrlList = [...document.querySelectorAll(selector)];
-    imgUrlList.forEach(e => {
-      imgURL.push(e.href)
-    })
-    return imgURL
-  });
-  imgURL.forEach((e, i) => {
-    if (currentNumber >= 200) {
-      browser.close();
-      console.log('All pictures downloaded complete!')
-      process.exit(0);
+  let images = await page.evaluate(
+    () => Array.from(document.querySelectorAll('a.view_img_link')).map(e => e.href)
+  );
+  images.forEach(async url => {
+    try {
+      const res = await axios.get(url, {
+        responseType: 'stream'
+      });
+      res.data.pipe(fs.createWriteStream(`./result/girl/${currentNum}.${getExtension(url)}`));
+    } catch (e) {
+      console.log(e);
     }
-    axios.get(e, {
-      responseType: 'stream'
-    }).then(res => {
-      res.data.pipe(fs.createWriteStream(`./result/girl/${currentNumber}.${e.substr(e.length-3)}`));
-      currentNumber++;
-    })
+    currentNum++;
   });
-  let nextPage = await page.evaluate(() => {
-    return document.querySelectorAll('#comments > div:nth-child(4) > div > a.previous-comment-page')[0].href;
-  })
+  let nextPage = await page.evaluate(() =>
+    document.querySelectorAll('#comments > div:nth-child(4) > div > a.previous-comment-page')[0].href
+  );
   console.log('OK!');
+  if (++times > 5) {
+    browser.close();
+    console.log('All pictures downloaded complete!')
+    process.exit(0);
+  }
   setTimeout(function () {
     run(nextPage)
-  }, 3000);
-
-
-
+  }, 5000);
 }
+
 run('http://jandan.net/ooxx');
